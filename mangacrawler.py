@@ -18,19 +18,16 @@ __author__ = "Daniel Oelschlegel"
 __copyright__ = "Copyright 2011, " + __author__
 __credits__ = [""]
 __license__ = "BSD"
-__version__ = "0.2"
+__version__ = "0.2.5"
 
 class Sites(object):
     def __init__(self):
         self._finished = 0
         self._running = 0
-        self.MAX_THREAD = 1
-
-# sample url: http://www.mangafox.com/manga/a_girls/?no_warning=1
-# tested on 09/2011
-class MangaFox(Sites):
-    def __init__(self, url):
-        Sites.__init__(self)
+        self.MAX_THREAD = 4
+        self._dict = {}
+        
+    def run(self, url):
         # html5 parser engine
         beautifulSoup = html5lib.HTMLParser(
             tree=html5lib.treebuilders.getTreeBuilder("beautifulsoup"))
@@ -41,6 +38,9 @@ class MangaFox(Sites):
         soup = beautifulSoup.parse(browser.open(url))
         # get all chapters of this manga
         pages = self._get_pages(soup, url)
+        # create directories
+        for page in pages:
+            self._create_dir(page)
         # start for every chapter a thread
         self._finished = len(pages)
         for page in pages:
@@ -51,6 +51,21 @@ class MangaFox(Sites):
         while self._finished:
             pass
 
+    def _create_dir(self, page):
+        full_path = ""
+        for part in page[1:]:
+            full_path = join(full_path, part)
+            if not exists(full_path):
+                mkdir(full_path)
+        self._dict["".join(page[1:])] = full_path
+
+# sample url: http://www.mangafox.com/manga/a_girls/?no_warning=1
+# tested on 09/2011
+class MangaFox(Sites):
+    def __init__(self, url):
+        Sites.__init__(self)
+        self.run(url)
+        
     def download(self, page, url):
         self._running += 1
         beautifulSoup = html5lib.HTMLParser(
@@ -58,12 +73,7 @@ class MangaFox(Sites):
         browser = mechanize.Browser()
         browser.add_headers = []
         soup = beautifulSoup.parse(browser.open(url))
-        # create directory hierachy
-        full_path = ""
-        for parts in page[1:]:
-            full_path = join(full_path, parts)
-            if not exists(full_path):
-                mkdir(full_path)
+        full_path = self._dict["".join(page[1:])]
             
         # my anchor is the chapter overview site
         anchor = beautifulSoup.parse(browser.open(page[0]))
@@ -96,31 +106,12 @@ class MangaFox(Sites):
             pages.append([str(chapter_url), str(parts[2]), str(parts[3]), str(parts[4])])
         return pages
 
-# http://www.mangareader.net/163/sekirei.html
+# sample url: http://www.mangareader.net/163/sekirei.html
 # tested 09/2011
 class MangaReader(Sites):
     def __init__(self, url):
         Sites.__init__(self)
-        # html5 parser engine
-        beautifulSoup = html5lib.HTMLParser(
-            tree=html5lib.treebuilders.getTreeBuilder("beautifulsoup"))
-        # browser engine
-        browser = mechanize.Browser()
-        # no special header needed, yet
-        browser.add_headers = []
-        soup = beautifulSoup.parse(browser.open(url))
-        # get all chapters of this manga
-        pages = self._get_pages(soup, url)
-        # start for every chapter a thread
-        self._finished = len(pages)
-        for page in pages:
-            while self._running > self.MAX_THREAD:
-                pass
-            thread.start_new_thread(self.download, (page, url))
-        # good enough, run until all threads done
-        while self._finished:
-            pass
-
+        self.run(url)
 
     def download(self, page, url):
         self._running += 1
@@ -129,12 +120,7 @@ class MangaReader(Sites):
         browser = mechanize.Browser()
         browser.add_headers = []
         soup = beautifulSoup.parse(browser.open(url))
-        # create directory hierachy
-        full_path = ""
-        for parts in page[1:]:
-            full_path = join(full_path, parts)
-            if not exists(full_path):
-                mkdir(full_path)
+        full_path = self._dict["".join(page[1:])]
             
         # my anchor is the chapter overview site
         anchor = beautifulSoup.parse(browser.open(page[0]))
