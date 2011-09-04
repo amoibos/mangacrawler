@@ -26,8 +26,8 @@ class Sites(object):
         self._running = 0
         self.MAX_THREAD = 4
         self._dict = {}
-        
-    def run(self, url):
+    
+    def _components(self, url):
         # html5 parser engine
         beautifulSoup = html5lib.HTMLParser(
             tree=html5lib.treebuilders.getTreeBuilder("beautifulsoup"))
@@ -36,6 +36,10 @@ class Sites(object):
         # no special header needed, yet
         browser.add_headers = []
         soup = beautifulSoup.parse(browser.open(url))
+        return beautifulSoup, browser, soup
+
+    def run(self, url):
+        beautifulSoup, browser, soup = self._components(url)
         # get all chapters of this manga
         pages = self._get_pages(soup, url)
         # create directories
@@ -68,11 +72,7 @@ class MangaFox(Sites):
         
     def download(self, page, url):
         self._running += 1
-        beautifulSoup = html5lib.HTMLParser(
-            tree=html5lib.treebuilders.getTreeBuilder("beautifulsoup"))
-        browser = mechanize.Browser()
-        browser.add_headers = []
-        soup = beautifulSoup.parse(browser.open(url))
+        beautifulSoup, browser, soup = self._components(url)
         full_path = self._dict["".join(page[1:])]
             
         # my anchor is the chapter overview site
@@ -115,11 +115,7 @@ class MangaReader(Sites):
 
     def download(self, page, url):
         self._running += 1
-        beautifulSoup = html5lib.HTMLParser(
-            tree=html5lib.treebuilders.getTreeBuilder("beautifulsoup"))
-        browser = mechanize.Browser()
-        browser.add_headers = []
-        soup = beautifulSoup.parse(browser.open(url))
+        beautifulSoup, browser, soup = self._components(url)
         full_path = self._dict["".join(page[1:])]
             
         # my anchor is the chapter overview site
