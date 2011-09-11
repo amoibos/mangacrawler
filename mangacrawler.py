@@ -7,25 +7,25 @@ from os import mkdir
 from os.path import join, exists
 from sys import exit, argv, stderr
 from shutil import move
-import thread
 from urlparse import urljoin, urlsplit
+from multiprocessing import Process, Queue
+from Queue import Empty
 
 import html5lib
 import mechanize
 import BeautifulSoup
 
+
 __author__ = "Daniel Oelschlegel"
 __copyright__ = "Copyright 2011, " + __author__
 __credits__ = [""]
 __license__ = "BSD"
-__version__ = "0.2.5"
+__version__ = "0.2.6"
 
 class Sites(object):
-    def __init__(self):
-        self._finished = 0
-        self._running = 0
-        self.MAX_THREAD = 4
+    def __init__(self, url):
         self._dict = {}
+        self.run(url)
     
     def _components(self, url):
         # html5 parser engine
@@ -42,18 +42,25 @@ class Sites(object):
         beautifulSoup, browser, soup = self._components(url)
         # get all chapters of this manga
         pages = self._get_pages(soup, url)
-        # create directories
+        work_queue = Queue()
+        for element in pages:
+            work_queue.put(element)
+        
+        # create directories and start tasks(processes)
         for page in pages:
             self._create_dir(page)
-        # start for every chapter a thread
-        self._finished = len(pages)
-        for page in pages:
-            while self._running > self.MAX_THREAD:
-                pass
-            thread.start_new_thread(self.download, (page, url))
-        # good enough, run until all threads done
-        while self._finished:
-            pass
+        processes = [Process(target=self._do_work, args=(work_queue, url,)) for i in range(8)]
+        for p in processes:
+            p.start()
+        for p in processes:
+            p.join()
+    
+    def _do_work(self, work_queue, url):
+        while True:
+            try:
+                self.download(work_queue.get(block=False), url)
+            except Empty:
+                break
 
     def _create_dir(self, page):
         full_path = ""
@@ -67,11 +74,9 @@ class Sites(object):
 # tested on 09/2011
 class MangaFox(Sites):
     def __init__(self, url):
-        Sites.__init__(self)
-        self.run(url)
+        Sites.__init__(self, url)
         
     def download(self, page, url):
-        self._running += 1
         beautifulSoup, browser, soup = self._components(url)
         full_path = self._dict["".join(page[1:])]
             
@@ -92,8 +97,6 @@ class MangaFox(Sites):
             img_name = "%04d%s" % (no, file_path[file_path.rfind("."):])
             # move to right directory
             move(file_path, join(full_path, img_name))
-        self._finished -= 1
-        self._running -= 1
         
     def _get_pages(self, soup, url):
         pages = []
@@ -111,10 +114,8 @@ class MangaFox(Sites):
 class MangaReader(Sites):
     def __init__(self, url):
         Sites.__init__(self)
-        self.run(url)
 
     def download(self, page, url):
-        self._running += 1
         beautifulSoup, browser, soup = self._components(url)
         full_path = self._dict["".join(page[1:])]
             
@@ -135,8 +136,6 @@ class MangaReader(Sites):
             img_name = "%04d%s" % (no, file_path[file_path.rfind("."):])
             # move to right directory
             move(file_path, join(full_path, img_name))
-        self._finished -= 1
-        self._running -= 1
         
     def _get_pages(self, soup, url):
         pages = []
