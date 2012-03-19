@@ -17,10 +17,10 @@ import BeautifulSoup
 
 
 __author__ = "Daniel Oelschlegel"
-__copyright__ = "Copyright 2011, " + __author__
+__copyright__ = "Copyright 2012, " + __author__
 __credits__ = [""]
 __license__ = "BSD"
-__version__ = "0.2.6"
+__version__ = "0.3"
 
 class Sites(object):
     def __init__(self, url):
@@ -33,8 +33,8 @@ class Sites(object):
             tree=html5lib.treebuilders.getTreeBuilder("beautifulsoup"))
         # browser engine
         browser = mechanize.Browser()
-        # no special header needed, yet
-        browser.add_headers = []
+        browser.addheaders = [('User-agent', 
+        'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.0.1) Gecko/2008071615 Fedora/3.0.1-1.fc9 Firefox/3.0.1')]
         soup = beautifulSoup.parse(browser.open(url))
         return beautifulSoup, browser, soup
 
@@ -109,11 +109,57 @@ class MangaFox(Sites):
             pages.append([str(chapter_url), str(parts[2]), str(parts[3]), str(parts[4])])
         return pages
 
+# sample url: http://www.meinmanga.com/manga/Berserk/kapitel/Bd_1_Der_Schwarze_Ritter/
+# tested 03/2012
+class MeinManga(Sites):
+    def __init__(self, url):
+        Sites.__init__(self, url)
+   
+    def download(self, page, url):
+        beautifulSoup, browser, soup = self._components(url)
+        full_path = self._dict["".join(page[1:])]
+            
+        # my anchor is the chapter overview site
+        anchor = beautifulSoup.parse(browser.open(page[0]))
+        # get all links to the images
+        no = 0
+        for entry in anchor.findAll("select")[1].findAll("option"):
+            url = page[0]
+            site = "%s%s%s" % (url, entry["value"], ".html")
+            soup = beautifulSoup.parse(browser.open(site))
+            # get the absolute link to image
+            image_page = soup.findAll("img", {"class":"pic_fragment"})
+            if image_page == None:
+                image_page = soup.find("img", {"class":"pic_fragment_biggest"})
+            # some sites have splitted images
+            appendix = ['a','b','c','d']
+            part = 0
+            for fragment in image_page:
+                file_path = browser.retrieve(image_page[part]["src"])[0]
+                if part == 0:
+                    no += 1
+                img_name = "%04d%s%s" % (no, appendix[part], file_path[file_path.rfind("."):])
+                # move to right directory
+                move(file_path, join(full_path, img_name))
+                part += 1
+                
+    def _get_pages(self, soup, url):
+        pages = []
+        div_element = soup.find("div", {"id":"content"})
+        select_element = soup.find("select")
+        chapters = select_element.findAll("option")
+        
+        for chapter in chapters:
+            # "http:", '', "www.meinmanga.com", "manga", TITLE, "kapitel", titel, ''
+            parts = chapter['value'].split('/')
+            pages.append([chapter['value'], str(parts[4]), str(parts[-2]), ""])
+        return pages
+
 # sample url: http://www.mangareader.net/163/sekirei.html
 # tested 09/2011
 class MangaReader(Sites):
     def __init__(self, url):
-        Sites.__init__(self)
+        Sites.__init__(self, url)
 
     def download(self, page, url):
         beautifulSoup, browser, soup = self._components(url)
@@ -158,6 +204,9 @@ def main(url):
     elif "mangareader" in url:
         print "mangareader site detected"
         MangaReader(url)
+    elif "meinmanga" in url:
+        print "meinmanga site detected"
+        MeinManga(url)
     else:
         print >> stderr, "no site detected"
     
