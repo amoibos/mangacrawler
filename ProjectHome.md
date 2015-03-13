@@ -1,0 +1,1 @@
+A small proof of concept project of a crawler for some manga scan sites.
